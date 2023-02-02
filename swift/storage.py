@@ -49,7 +49,7 @@ def validate_settings(backend):
     # http://docs.openstack.org/developer/python-swiftclient/cli.html#authentication
     if not backend.auth_version:
         if (backend.user_domain_name or backend.user_domain_id) and \
-           (backend.project_domain_name or backend.project_domain_id):
+                (backend.project_domain_name or backend.project_domain_id):
             # Set version 3 if domain and project scoping is defined
             backend.auth_version = '3'
         else:
@@ -107,10 +107,13 @@ def prepend_name_prefix(func):
     instance methods where the first parameter after `self` is `name` or a
     comparable parameter of a different name.
     """
+
     @wraps(func)
     def prepend_prefix(self, name, *args, **kwargs):
+        name = name.replace("\\", "/")  # 这里防止 windows os.path.json生成反斜杠路径
         name = self.name_prefix + name
         return func(self, name, *args, **kwargs)
+
     return prepend_prefix
 
 
@@ -242,13 +245,11 @@ class SwiftStorage(Storage):
                 self._base_url = self.override_base_url
         return self._base_url
 
+    @prepend_name_prefix
     def _open(self, name, mode='rb'):
-        original_name = name
-        name = self.name_prefix + name
-
         headers, content = self.swift_conn.get_object(self.container_name, name)
         buf = BytesIO(content)
-        buf.name = os.path.basename(original_name)
+        buf.name = os.path.basename(name)
         buf.mode = mode
         return File(buf)
 
@@ -278,7 +279,7 @@ class SwiftStorage(Storage):
             content_length = None
 
         if content_type in self.gzip_content_types or (
-           content_type is None and self.gzip_unknown_content_type):
+                content_type is None and self.gzip_unknown_content_type):
             gz_data = BytesIO()
             gzf = gzip.GzipFile(filename=name,
                                 fileobj=gz_data,
@@ -299,6 +300,7 @@ class SwiftStorage(Storage):
                                    content_length=content_length,
                                    content_type=content_type,
                                    headers=headers)
+        content.close()
         return original_name
 
     def get_headers(self, name):
